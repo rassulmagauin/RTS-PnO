@@ -40,10 +40,7 @@ if __name__ == '__main__':
     if os.path.exists(exp_dir):
         print(f'Experiment {exp_dir} exists, delete and continue? [Y/N]', end=' ')
 
-        response = input()
-        while response not in ['Y', 'N']:
-            print('Invalid choice. Choose between [Y/N]', end=' ')
-            response = input()
+        response = 'Y'
 
         shutil.rmtree(exp_dir) if response == 'Y' else exit()
 

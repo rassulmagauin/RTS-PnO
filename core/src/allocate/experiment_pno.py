@@ -34,10 +34,12 @@ class PnOExperiment(Experiment):
         self.test_loader, self.test_set = get_allocating_loader_and_dataset(self.configs, self.allocate_model, split='test', shuffle=False)
 
     def _build_criterion(self):
+        pyepo_processes = 1 
+
         if self.configs.criterion == "SPO+":
-            criteria = pyepo.func.SPOPlus(self.allocate_model, processes=self.configs.num_workers) # Maybe the loss function can be added to the MSE (as an ablation)
+            criteria = pyepo.func.SPOPlus(self.allocate_model, processes=pyepo_processes) 
         elif self.configs.criterion == "MSE+SPO+":
-            loss_spo = pyepo.func.SPOPlus(self.allocate_model, processes=self.configs.num_workers)
+            loss_spo = pyepo.func.SPOPlus(self.allocate_model, processes=pyepo_processes)
             loss_mse = nn.MSELoss()
             criteria = lambda y_pred, y, action, value: loss_spo(y_pred, y, action, value) + self.configs.criterion_weight * loss_mse(y_pred, y)
         return criteria

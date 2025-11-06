@@ -1,5 +1,6 @@
 Experiment:
-    exp_id: PatchTST/usdcny_pno
+    exp_id: PatchTST/usdcny_mpc_avg
+    prev_exp_id: PatchTST/usdcny_pno
 Hardware:
     random_seed: 2021
     num_workers: 0
@@ -38,14 +39,8 @@ Model:
     dropout: 0.3
     shared_proj: true
 Allocate:
-    criterion: MSE+SPO+
-    criterion_weight: 1
-    train_epochs: 100
     uncertainty_quantile: 0.3
-    patience: 3
     batch_size: 32
-    lr: 0.001
-    lr_scheduler: fixed
-    load_prev_weights: false
+    load_prev_weights: true
 Conformal:
     error_rate: 0.05
