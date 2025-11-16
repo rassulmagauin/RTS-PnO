@@ -24,8 +24,9 @@ def run_experiment(configs):
 
     # Evaluate
     print(f'{">" * 20} {"Start testing:":<15} {configs.exp_id} {"<" * 20}')
-    metrics = experiment.evaluate(experiment.test_loader, experiment.test_set.scaler, load_best=True, save_result=True)
+    metrics = experiment.evaluate(experiment.test_loader, experiment.test_set.scaler, load_best=True, save_result=True, log_cases=True, split_name="test")
     print(f'Test MSE: {metrics["MSE"]:.4f} | Test MAE: {metrics["MAE"]:.4f} | Test Regret: {metrics["Regret"]:.8f}')
+    print("Final test (with per-case log):", metrics)
 
 if __name__ == '__main__':
     parser = ArgumentParser()

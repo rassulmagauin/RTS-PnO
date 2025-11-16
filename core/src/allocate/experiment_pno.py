@@ -14,6 +14,7 @@ from .data_provider import get_allocating_loader_and_dataset
 import models
 from models.Allocate import AllocateModel
 from common.experiment import Experiment, EarlyStopping
+from utils.case_logger import CaseLogger
 
 class PnOExperiment(Experiment):
     def __init__(self, configs):
@@ -160,49 +161,95 @@ class PnOExperiment(Experiment):
         return loss
 
     @torch.no_grad()
-    def evaluate_regret(self, eval_loader, scaler=None):
+    def evaluate_regret(self, eval_loader, scaler=None, log_cases=False, split_name="val"):
         self.forecast_model.eval()
-        loss = 0
-        rel_loss = 0
+        loss = 0.0
+        rel_loss = 0.0
         trial = 0
+
+        # optional per-case logging
+        case_logger = None
+        if log_cases:
+            cases_dir = os.path.join(self.exp_dir, f"cases_{split_name}")
+            os.makedirs(cases_dir, exist_ok=True)
+            case_logger = CaseLogger(os.path.join(cases_dir, "cases.jsonl"))
+
+        global_idx = 0
 
         for batch in eval_loader:
             batch = [tensor.to(self.device) for tensor in batch]
             batch_x, batch_y, optimal_action, optimal_value = batch
 
             # Predict
-            with torch.no_grad():
-                batch_y_pred = self.forecast_model(batch_x).to("cpu").detach().numpy()
-                batch_y = batch_y.to("cpu").detach().numpy()
-                optimal_value = optimal_value.to("cpu").detach().numpy()
+            batch_y_pred = self.forecast_model(batch_x).to("cpu").detach().numpy()
+            batch_y = batch_y.to("cpu").detach().numpy()
+            # optimal_value not used for regret calc; keep if you need it later
 
-            # Different from pyepo.metric.regret
-            # Inverse Transform data
+            # Inverse transform if a scaler is provided
             if scaler is not None:
                 batch_y_pred = scaler.inverse_transform(batch_y_pred)
                 batch_y = scaler.inverse_transform(batch_y)
-                optimal_value = scaler.inverse_transform(optimal_value)
 
-            # Solve
+            # Solve and accumulate metrics
             for j in range(batch_y_pred.shape[0]):
-                # accumulate loss
-                this_regret = self._cal_regret(self.allocate_model, batch_y_pred[j], batch_y[j])
-                loss += this_regret
-                rel_loss += (this_regret / np.min(batch_y[j]))
+                y_pred_j = np.asarray(batch_y_pred[j], dtype=float).ravel()
+                y_true_j = np.asarray(batch_y[j], dtype=float).ravel()
 
-            trial += batch_x.shape[0]
+                # compute regret for this sample
+                this_regret = self._cal_regret(self.allocate_model, y_pred_j, y_true_j)
+                loss += float(this_regret)
+                rel_loss += float(this_regret) / float(np.min(y_true_j))
+                trial += 1
+
+                # optional per-case log
+                if case_logger is not None:
+                    # get allocation used by predicted costs
+                    self.allocate_model.setObj(y_pred_j)
+                    sol, _ = self.allocate_model.solve()
+                    # robust: whether sol is list or ndarray
+                    alloc = np.asarray(sol, dtype=float).ravel().tolist()
+
+                    case_logger.log({
+                        "split": split_name,
+                        "idx": int(global_idx),
+                        "regret": float(this_regret),
+                        "rel_regret": float(this_regret) / float(np.min(y_true_j)),
+                        "true_prices": y_true_j.tolist(),
+                        "pred_prices": y_pred_j.tolist(),
+                        "alloc": alloc,
+                        "optimal_cost": float(np.min(y_true_j)),
+                        "alloc_cost": float(np.dot(alloc, y_true_j)),
+                    })
+
+                global_idx += 1
 
         result = {
-            'abs_regret': loss / trial,
-            'rel_regret': rel_loss / trial
+            'abs_regret': loss / max(trial, 1),
+            'rel_regret': rel_loss / max(trial, 1),
         }
-
         return result
-        
     @torch.no_grad()
-    def evaluate(self, eval_loader, scaler, criterion=None, load_best=False, save_result=False):
-        eval_regret = self.evaluate_regret(eval_loader, scaler)
-        _, eval_metrics = self.evaluate_forecast(eval_loader, criterion, load_best)
+    def evaluate(self, eval_loader, scaler, criterion=None, load_best=False, save_result=False,
+                log_cases=False, split_name="val"):
+        """
+        Computes regret and forecast metrics on a loader.
+        - During training, allocate() calls: evaluate(loader, scaler)  -> defaults are fine.
+        - After training, run_pno.py calls:
+            evaluate(test_loader, test_scaler, load_best=True, save_result=True, log_cases=True, split_name="test")
+        """
+        if load_best:
+            self._load_best_checkpoint()
+
+        # regret (optionally logs per-case jsonl via evaluate_regret)
+        eval_regret = self.evaluate_regret(
+            eval_loader,
+            scaler,
+            log_cases=log_cases,
+            split_name=split_name
+        )
+
+        # forecast metrics (no need to reload best here again)
+        _, eval_metrics = self.evaluate_forecast(eval_loader, criterion, load_best=False)
         eval_metrics['Regret'] = eval_regret['abs_regret']
         eval_metrics['Rel Regret'] = eval_regret['rel_regret']
 
