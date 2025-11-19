@@ -5,7 +5,7 @@ Hardware:
     num_workers: 0
     gpu: 0
     use_multi_gpu: false
-    gpus: null
+    gpus: [0]
 Dataset:
     root_path: ../dataset
     data_path: exchange_rate_600s.csv
@@ -47,5 +47,9 @@ Allocate:
     lr: 0.001
     lr_scheduler: fixed
     load_prev_weights: false
+    log_cases: true
+    grb_threads: 1
+    grb_method: 1      # dual simplex
+    grb_crossover: 0
 Conformal:
     error_rate: 0.05

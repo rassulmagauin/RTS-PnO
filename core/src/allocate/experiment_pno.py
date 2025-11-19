@@ -15,9 +15,12 @@ import models
 from models.Allocate import AllocateModel
 from common.experiment import Experiment, EarlyStopping
 from utils.case_logger import CaseLogger
+from utils.repro import set_deterministic
 
 class PnOExperiment(Experiment):
     def __init__(self, configs):
+        seed = getattr(configs, "seed", 42)
+        set_deterministic(seed)
         super().__init__(configs)
         self.alpha = configs.error_rate
         self.horizon= configs.pred_len
@@ -56,7 +59,22 @@ class PnOExperiment(Experiment):
         self.model = self.forecast_model # Make it compatible with common experiment
 
     def _build_allocate_model(self):
-        self.allocate_model = AllocateModel(self.constraint, self.configs.uncertainty_quantile)
+        seed = getattr(self.configs, "seed", 42)
+        threads = getattr(self.configs, "grb_threads", 1)   # add to your config if you like
+        method = getattr(self.configs, "grb_method", 1)     # 1 = Dual Simplex
+        crossover = getattr(self.configs, "grb_crossover", 0)
+
+        self.allocate_model = AllocateModel(
+            self.constraint,
+            self.configs.uncertainty_quantile,
+            pred_len=self.configs.pred_len,
+            seed=seed,
+            threads=threads,
+            method=method,
+            crossover=crossover,
+            quiet=True
+        )
+        #self.allocate_model = AllocateModel(self.constraint, self.configs.uncertainty_quantile)
 
     def nonconformity(self, pred, true):
         return torch.nn.functional.l1_loss(pred, true, reduction="none")
