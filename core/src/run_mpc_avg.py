@@ -6,6 +6,17 @@ import yaml
 import numpy as np
 import torch
 
+# Disable TF32 and kernel autotuning
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+torch.use_deterministic_algorithms(True, warn_only=True)
+torch.set_float32_matmul_precision("highest")
+
+# For CUDA matmul determinism (PyTorch doc)
+os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
 # 1. import our new experiment class
 from allocate.experiment_mpc_avg import MpcAvgExperiment
 

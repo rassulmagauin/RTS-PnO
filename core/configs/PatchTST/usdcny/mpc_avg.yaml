@@ -1,6 +1,7 @@
 Experiment:
     exp_id: PatchTST/usdcny_mpc_avg
-    prev_exp_id: PatchTST/usdcny_pno 
+    prev_exp_id: PatchTST/usdcny_pno
+    uncertainty_quantile: 0.5
 
 Hardware:
     random_seed: 2021
@@ -46,6 +47,11 @@ Allocate:
     uncertainty_quantile: 0.3
     batch_size: 32 # This is the batch size for looping through test problems
     load_prev_weights: true
+    grb_threads: 1
+    grb_method: 1        # dual simplex
+    grb_crossover: 0
+    grb_seed: 42
+    grb_output: 0 
 
 Conformal:
     error_rate: 0.05
