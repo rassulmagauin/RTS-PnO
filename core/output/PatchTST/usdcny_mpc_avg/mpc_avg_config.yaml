@@ -2,6 +2,7 @@ Experiment:
     exp_id: PatchTST/usdcny_mpc_avg
     prev_exp_id: PatchTST/usdcny_pno
     uncertainty_quantile: 0.5
+    mpc_first_step_cap: 0.25
 Hardware:
     random_seed: 2021
     num_workers: 0

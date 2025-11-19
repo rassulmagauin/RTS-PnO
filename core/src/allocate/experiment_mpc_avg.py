@@ -75,14 +75,17 @@ class MpcAvgExperiment(Experiment):
         self.allocate_model = AllocateModel(
             self.constraint.numpy(),
             self.configs.uncertainty_quantile,
-            pred_len=H
+            pred_len=H,
+            first_step_cap=getattr(self.configs, "mpc_first_step_cap", None),
         )
         print("Gurobi allocation model built.")
 
     @torch.no_grad()
     def evaluate(self):
         print("ok running the big evaluation loop...")
-        mpc_jsonl_path = "output/PatchTST/usdcny_mpc_avg/mpc_cases.jsonl"
+        cases_dir = os.path.join(self.exp_dir, "cases_test")
+        os.makedirs(cases_dir, exist_ok=True)
+        mpc_jsonl_path = os.path.join(cases_dir, "cases.jsonl")
         case_logger = CaseLogger(mpc_jsonl_path)
 
         all_my_regrets = []
@@ -108,20 +111,26 @@ class MpcAvgExperiment(Experiment):
                 all_my_regrets.append(regret)
                 mse_i = float(np.mean((preds_1step - real_future) ** 2))
                 mae_i = float(np.mean(np.abs(preds_1step - real_future)))
+                optimal_cost = float(np.min(real_future))
+                alloc_cost = float(np.dot(alloc_abs, real_future))
+                rel_regret = float(regret) / optimal_cost if optimal_cost != 0 else None
 
+                # unified schema
                 case_logger.log(
+                    split="test",
+                    idx=int(case_idx),
                     case_id=int(case_idx),
                     algo="mpc",
                     regret=float(regret),
-                    rel_regret=None,
+                    rel_regret=rel_regret,
+                    true_prices=real_future.tolist(),
+                    pred_prices=preds_1step.tolist(),
+                    alloc=alloc_abs.tolist(),
+                    optimal_cost=optimal_cost,
+                    alloc_cost=alloc_cost,
                     mse=mse_i,
                     mae=mae_i,
-                    pred=preds_1step.tolist(),
-                    real=real_future.tolist(),
-                    alloc=alloc_abs.tolist(),
-                    oracle_alloc=None,
-                    time=None,
-                    extra={"alloc_frac_remaining": alloc_frac.tolist()}
+                    extra={"alloc_frac_remaining": alloc_frac.tolist()},
                 )
                 case_idx += 1
 
@@ -155,7 +164,12 @@ class MpcAvgExperiment(Experiment):
             per_step_pred_1ahead.append(pred_1ahead)
 
             remaining_steps = H - t
-            current_opt_model = AllocateModel(self.constraint.numpy(), self.configs.uncertainty_quantile, pred_len=remaining_steps)
+            current_opt_model = AllocateModel(
+                self.constraint.numpy(),
+                self.configs.uncertainty_quantile,
+                pred_len=remaining_steps,
+                first_step_cap=getattr(self.configs, "mpc_first_step_cap", None),  # NEW
+            )
             current_opt_model.setObj(pred_y_unscaled.squeeze())
             sol, _ = current_opt_model.solve()
             a_star = float(sol[0])

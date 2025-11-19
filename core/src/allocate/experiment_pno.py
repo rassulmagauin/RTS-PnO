@@ -227,9 +227,15 @@ class PnOExperiment(Experiment):
                     # robust: whether sol is list or ndarray
                     alloc = np.asarray(sol, dtype=float).ravel().tolist()
 
+                    mse_i = float(np.mean((y_pred_j - y_true_j) ** 2))
+                    mae_i = float(np.mean(np.abs(y_pred_j - y_true_j)))
+
+                    # unified schema
                     case_logger.log({
                         "split": split_name,
                         "idx": int(global_idx),
+                        "case_id": int(global_idx),
+                        "algo": "pno",
                         "regret": float(this_regret),
                         "rel_regret": float(this_regret) / float(np.min(y_true_j)),
                         "true_prices": y_true_j.tolist(),
@@ -237,6 +243,9 @@ class PnOExperiment(Experiment):
                         "alloc": alloc,
                         "optimal_cost": float(np.min(y_true_j)),
                         "alloc_cost": float(np.dot(alloc, y_true_j)),
+                        "mse": mse_i,
+                        "mae": mae_i,
+                        # no MPC-only extras here; keep `extra` absent or {}
                     })
 
                 global_idx += 1
