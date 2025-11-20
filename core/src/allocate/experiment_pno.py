@@ -185,7 +185,6 @@ class PnOExperiment(Experiment):
         rel_loss = 0.0
         trial = 0
 
-        # optional per-case logging
         case_logger = None
         if log_cases:
             cases_dir = os.path.join(self.exp_dir, f"cases_{split_name}")
@@ -198,20 +197,20 @@ class PnOExperiment(Experiment):
             batch = [tensor.to(self.device) for tensor in batch]
             batch_x, batch_y, optimal_action, optimal_value = batch
 
-            # Predict
+            # model prediction in *scaled* space
             batch_y_pred = self.forecast_model(batch_x).to("cpu").detach().numpy()
-            batch_y = batch_y.to("cpu").detach().numpy()
-            # optimal_value not used for regret calc; keep if you need it later
+            batch_y_true = batch_y.to("cpu").detach().numpy()
 
-            # Inverse transform if a scaler is provided
-            if scaler is not None:
-                batch_y_pred = scaler.inverse_transform(batch_y_pred)
-                batch_y = scaler.inverse_transform(batch_y)
+            B, H = batch_y_pred.shape
 
-            # Solve and accumulate metrics
-            for j in range(batch_y_pred.shape[0]):
+            for j in range(B):
                 y_pred_j = np.asarray(batch_y_pred[j], dtype=float).ravel()
-                y_true_j = np.asarray(batch_y[j], dtype=float).ravel()
+                y_true_j = np.asarray(batch_y_true[j], dtype=float).ravel()
+
+                # --- FIX: inverse-transform (H,1) -> (H,) per sample ---
+                if scaler is not None:
+                    y_pred_j = scaler.inverse_transform(y_pred_j.reshape(-1, 1)).ravel()
+                    y_true_j = scaler.inverse_transform(y_true_j.reshape(-1, 1)).ravel()
 
                 # compute regret for this sample
                 this_regret = self._cal_regret(self.allocate_model, y_pred_j, y_true_j)
@@ -219,18 +218,16 @@ class PnOExperiment(Experiment):
                 rel_loss += float(this_regret) / float(np.min(y_true_j))
                 trial += 1
 
-                # optional per-case log
                 if case_logger is not None:
-                    # get allocation used by predicted costs
+                    # allocation used by predicted costs
                     self.allocate_model.setObj(y_pred_j)
                     sol, _ = self.allocate_model.solve()
-                    # robust: whether sol is list or ndarray
                     alloc = np.asarray(sol, dtype=float).ravel().tolist()
 
                     mse_i = float(np.mean((y_pred_j - y_true_j) ** 2))
                     mae_i = float(np.mean(np.abs(y_pred_j - y_true_j)))
 
-                    # unified schema
+                    # unified record (matches PNO schema you like)
                     case_logger.log({
                         "split": split_name,
                         "idx": int(global_idx),
@@ -245,7 +242,6 @@ class PnOExperiment(Experiment):
                         "alloc_cost": float(np.dot(alloc, y_true_j)),
                         "mse": mse_i,
                         "mae": mae_i,
-                        # no MPC-only extras here; keep `extra` absent or {}
                     })
 
                 global_idx += 1
@@ -255,6 +251,7 @@ class PnOExperiment(Experiment):
             'rel_regret': rel_loss / max(trial, 1),
         }
         return result
+
     @torch.no_grad()
     def evaluate(self, eval_loader, scaler, criterion=None, load_best=False, save_result=False,
                 log_cases=False, split_name="val"):

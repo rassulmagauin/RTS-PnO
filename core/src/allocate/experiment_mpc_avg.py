@@ -159,8 +159,11 @@ class MpcAvgExperiment(Experiment):
             history_tensor = torch.tensor(history_scaled, dtype=torch.float32).unsqueeze(0).to(self.device)
 
             pred_y_scaled = self.forecast_model(history_tensor)
-            pred_y_unscaled = self.scaler.inverse_transform(pred_y_scaled.cpu().numpy().reshape(1, H))
-            pred_1ahead = float(pred_y_unscaled.squeeze()[0])
+            pred_vec = pred_y_scaled.cpu().numpy().ravel()              # (H,)
+            pred_y_unscaled = self.scaler.inverse_transform(
+                pred_vec.reshape(-1, 1)                                 # (H,1)
+            ).ravel()                                                   # (H,)
+            pred_1ahead = float(pred_y_unscaled[0])
             per_step_pred_1ahead.append(pred_1ahead)
 
             remaining_steps = H - t
@@ -170,7 +173,7 @@ class MpcAvgExperiment(Experiment):
                 pred_len=remaining_steps,
                 first_step_cap=getattr(self.configs, "mpc_first_step_cap", None),  # NEW
             )
-            current_opt_model.setObj(pred_y_unscaled.squeeze())
+            current_opt_model.setObj(pred_y_unscaled)
             sol, _ = current_opt_model.solve()
             a_star = float(sol[0])
 
