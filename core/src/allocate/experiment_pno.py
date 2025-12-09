@@ -19,7 +19,7 @@ from utils.repro import set_deterministic
 
 class PnOExperiment(Experiment):
     def __init__(self, configs):
-        seed = getattr(configs, "seed", 42)
+        seed = getattr(configs, "random_seed", 42)
         set_deterministic(seed)
         super().__init__(configs)
         self.alpha = configs.error_rate

@@ -3,6 +3,7 @@ import numpy as np
 import gurobipy as gp
 from gurobipy import GRB
 from pyepo.model.grb import optGrbModel
+from typing import Optional
 
 class AllocateModel(optGrbModel):
     """
@@ -26,12 +27,12 @@ class AllocateModel(optGrbModel):
         uncertainty_quantile=0.5,
         pred_len=88,
         *,
-        first_step_cap: float | None = None,  # NEW: max fraction you can invest *now* (0..1)
+        first_step_cap: Optional[float] = None,  # NEW: max fraction you can invest *now* (0..1)
         seed: int = 42,
         threads: int = 1,
         method: int = 1,        # 1 = Dual Simplex
         crossover: int = 0,     # keep deterministic if Barrier were used
-        numeric_focus: int | None = None,  # 0..3
+        numeric_focus: Optional[int] = None,  # 0..3
         quiet: bool = True
     ):
         self.uncertainty = np.array(uncertainty)
